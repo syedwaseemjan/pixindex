@@ -4,6 +4,7 @@ from PIL import Image
 
 from pixindex.db import ImageRow, connect, upsert
 from pixindex.index import index_local
+from pixindex.query import Filters
 from pixindex.stat import catalog_stats, format_bytes, format_stats
 
 
@@ -113,7 +114,7 @@ def test_source_filter(tmp_path: Path) -> None:
     two = str(tmp_path / "two")
     upsert(conn, _row(f"{one}/a.jpg", one, size=10))
     upsert(conn, _row(f"{two}/b.jpg", two, size=20))
-    stats = catalog_stats(conn, source=one)
+    stats = catalog_stats(conn, Filters(source=one))
     conn.close()
     assert stats.files == 1
     assert stats.bytes == 10

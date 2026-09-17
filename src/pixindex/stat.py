@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import sqlite3
 from dataclasses import dataclass
-from pathlib import Path
+
+from pixindex.query import Filters, where_clause
 
 
 @dataclass(frozen=True)
@@ -22,13 +23,9 @@ class CatalogStats:
 
 
 def catalog_stats(
-    conn: sqlite3.Connection, source: str | None = None
+    conn: sqlite3.Connection, filters: Filters | None = None
 ) -> CatalogStats:
-    where = ""
-    params: tuple[str, ...] = ()
-    if source is not None:
-        where = " WHERE source = ?"
-        params = (source,)
+    where, params = where_clause(filters or Filters())
 
     row = conn.execute(
         f"""
@@ -105,12 +102,6 @@ def format_bytes(size: int) -> str:
             return f"{value:.1f} {unit}"
         value /= 1024
     return f"{size} B"
-
-
-def resolve_source(source: str | None) -> str | None:
-    if source is None:
-        return None
-    return str(Path(source).expanduser().resolve())
 
 
 def _day(value: str | None) -> str | None:

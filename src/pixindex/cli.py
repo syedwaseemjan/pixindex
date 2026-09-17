@@ -7,7 +7,8 @@ import typer
 from pixindex import __version__
 from pixindex.db import connect, resolve_db_path
 from pixindex.index import index_local
-from pixindex.stat import catalog_stats, format_stats, resolve_source
+from pixindex.query import QueryError, parse_filters, search_uris
+from pixindex.stat import catalog_stats, format_stats
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -73,6 +74,7 @@ def index(
 
 @app.command()
 def search(
+    ctx: typer.Context,
     camera: str | None = typer.Option(
         None, help="Camera make or model contains this text."
     ),
@@ -91,10 +93,24 @@ def search(
     min_size: str | None = typer.Option(
         None, help="Minimum file size, for example 5mb."
     ),
-    source: str | None = typer.Option(None, help="Limit to one indexed root."),
+    source: str | None = typer.Option(None, help="Limit to one indexed folder."),
 ) -> None:
-    """Filter the catalog and print matching URIs."""
-    _not_implemented("search")
+    """Filter the catalog and print matching paths."""
+    filters = _filters(
+        source=source,
+        camera=camera,
+        after=after,
+        before=before,
+        has_gps=has_gps,
+        ext=ext,
+        min_size=min_size,
+    )
+    conn = _open_catalog(ctx)
+    try:
+        for uri in search_uris(conn, filters):
+            typer.echo(uri)
+    finally:
+        conn.close()
 
 
 @app.command()
@@ -105,17 +121,9 @@ def stat(
     ),
 ) -> None:
     """Print a summary of the catalog."""
-    db_path = ctx.obj["db"]
-    if not db_path.is_file():
-        typer.echo(
-            f"No catalog at {db_path}. Run pixindex index first.",
-            err=True,
-        )
-        raise typer.Exit(code=1)
-
-    conn = connect(db_path)
+    conn = _open_catalog(ctx)
     try:
-        typer.echo(format_stats(catalog_stats(conn, resolve_source(source))))
+        typer.echo(format_stats(catalog_stats(conn, _filters(source=source))))
     finally:
         conn.close()
 
@@ -126,6 +134,25 @@ def export(
 ) -> None:
     """Write matching rows to csv or json."""
     _not_implemented("export")
+
+
+def _open_catalog(ctx: typer.Context):
+    db_path = ctx.obj["db"]
+    if not db_path.is_file():
+        typer.echo(
+            f"No catalog at {db_path}. Run pixindex index first.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+    return connect(db_path)
+
+
+def _filters(**kwargs):
+    try:
+        return parse_filters(**kwargs)
+    except QueryError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
 
 
 def _not_implemented(command: str) -> None:

@@ -4,7 +4,7 @@ pixindex looks through your pictures and writes down the useful facts about each
 
 You run it in the terminal. It does not start a website, a queue, or a background service.
 
-Right now it only works on pictures already on your computer. Amazon S3 and search are not ready yet.
+Right now it only works on pictures already on your computer. Amazon S3 is not ready yet.
 
 ## What it does today
 
@@ -96,12 +96,33 @@ pixindex --db ./catalog.sqlite stat --source ./photos
 
 If you have not indexed anything yet, stat tells you that and exits.
 
-## What is not ready
+## Search
 
-These commands exist so you can see the plan, but they do not work yet:
+Search prints one file path per line. Use the same `--db` as when you indexed.
 
 ```bash
-pixindex search --camera Nikon --has-gps
+pixindex --db ./catalog.sqlite search --camera Nikon --has-gps
+pixindex --db ./catalog.sqlite search --after 2024-06-01 --before 2024-08-31
+pixindex --db ./catalog.sqlite search --ext jpg --min-size 5mb
+pixindex --db ./catalog.sqlite search --source ./photos --no-gps
+```
+
+You can combine flags. A picture must match all of them.
+
+- `--camera` — make or model contains this text (`Nikon` matches `Nikon` or `NIKON Z8`)
+- `--after` / `--before` — date the photo was taken, `YYYY-MM-DD`. Both ends are included. Pictures with no date are left out.
+- `--has-gps` / `--no-gps` — has a location, or does not
+- `--ext` — file type, for example `jpg` or `png`. `jpg` also matches `.jpeg`
+- `--min-size` — smallest file size, for example `5mb` or `200kb`
+- `--source` — only pictures from one folder you already indexed
+
+No matches means no output. That is normal.
+
+If a date or size does not look right, pixindex says so and exits.
+
+## What is not ready
+
+```bash
 pixindex export csv
 pixindex index s3://my-bucket/photos/
 ```

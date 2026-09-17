@@ -65,3 +65,30 @@ def test_stat_after_index(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "1 picture" in result.stdout
     assert "With GPS: 0 of 1 (0%)" in result.stdout
+
+
+def test_search_missing_catalog(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--db", str(tmp_path / "missing.sqlite"), "search"])
+    assert result.exit_code == 1
+    assert "No catalog" in result.stderr
+
+
+def test_search_lists_paths(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    Image.new("RGB", (8, 8), color="red").save(photos / "shot.png")
+    db = tmp_path / "index.sqlite"
+
+    runner.invoke(app, ["--db", str(db), "index", str(photos)])
+    result = runner.invoke(app, ["--db", str(db), "search", "--ext", "png"])
+
+    assert result.exit_code == 0
+    assert str((photos / "shot.png").resolve()) in result.stdout
+
+
+def test_search_bad_date(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["--db", str(tmp_path / "index.sqlite"), "search", "--after", "nope"]
+    )
+    assert result.exit_code == 1
+    assert "YYYY-MM-DD" in result.stderr
