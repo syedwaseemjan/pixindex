@@ -4,7 +4,7 @@ pixindex looks through your pictures and writes down the useful facts about each
 
 You run it in the terminal. It does not start a website, a queue, or a background service.
 
-Right now it only works on pictures already on your computer. Amazon S3, search, and summaries are not ready yet.
+Right now it only works on pictures already on your computer. Amazon S3 and search are not ready yet.
 
 ## What it does today
 
@@ -78,12 +78,29 @@ pixindex --db ./catalog.sqlite index ./photos
 
 pixindex only re-reads a file if the size or the last-modified time changed. A large folder is slow the first time. Later runs are mostly a quick check.
 
+## See a summary
+
+Use the same `--db` as when you indexed:
+
+```bash
+pixindex --db ./catalog.sqlite stat
+```
+
+You get a short report: how many pictures, how much space they take, the date range, how many have GPS, and which cameras showed up.
+
+To summarize only one folder you already indexed:
+
+```bash
+pixindex --db ./catalog.sqlite stat --source ./photos
+```
+
+If you have not indexed anything yet, stat tells you that and exits.
+
 ## What is not ready
 
 These commands exist so you can see the plan, but they do not work yet:
 
 ```bash
-pixindex stat
 pixindex search --camera Nikon --has-gps
 pixindex export csv
 pixindex index s3://my-bucket/photos/

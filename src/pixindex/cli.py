@@ -5,8 +5,9 @@ from pathlib import Path
 import typer
 
 from pixindex import __version__
-from pixindex.db import resolve_db_path
+from pixindex.db import connect, resolve_db_path
 from pixindex.index import index_local
+from pixindex.stat import catalog_stats, format_stats, resolve_source
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -97,9 +98,26 @@ def search(
 
 
 @app.command()
-def stat() -> None:
+def stat(
+    ctx: typer.Context,
+    source: str | None = typer.Option(
+        None, help="Limit the summary to one indexed folder."
+    ),
+) -> None:
     """Print a summary of the catalog."""
-    _not_implemented("stat")
+    db_path = ctx.obj["db"]
+    if not db_path.is_file():
+        typer.echo(
+            f"No catalog at {db_path}. Run pixindex index first.",
+            err=True,
+        )
+        raise typer.Exit(code=1)
+
+    conn = connect(db_path)
+    try:
+        typer.echo(format_stats(catalog_stats(conn, resolve_source(source))))
+    finally:
+        conn.close()
 
 
 @app.command()

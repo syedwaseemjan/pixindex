@@ -45,3 +45,23 @@ def test_index_local_folder(tmp_path: Path) -> None:
     assert result.exit_code == 0
     assert "Indexed 1, skipped 0, failed 0." in result.stdout
     assert db.is_file()
+
+
+def test_stat_missing_catalog(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--db", str(tmp_path / "missing.sqlite"), "stat"])
+    assert result.exit_code == 1
+    assert "No catalog" in result.stderr
+
+
+def test_stat_after_index(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    Image.new("RGB", (16, 9), color="red").save(photos / "shot.png")
+    db = tmp_path / "index.sqlite"
+
+    runner.invoke(app, ["--db", str(db), "index", str(photos)])
+    result = runner.invoke(app, ["--db", str(db), "stat"])
+
+    assert result.exit_code == 0
+    assert "1 picture" in result.stdout
+    assert "With GPS: 0 of 1 (0%)" in result.stdout
