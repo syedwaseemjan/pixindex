@@ -5,8 +5,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from io import BytesIO
+
 from PIL import Image
 from PIL.ExifTags import IFD
+
+EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+JPEG_EXTENSIONS = {".jpg", ".jpeg"}
 
 MAKE = 271
 MODEL = 272
@@ -34,8 +39,9 @@ class ImageMeta:
         return self.gps_lat is not None and self.gps_lon is not None
 
 
-def read_metadata(path: Path) -> ImageMeta:
-    with Image.open(path) as img:
+def read_metadata(source: Path | bytes) -> ImageMeta:
+    opened = BytesIO(source) if isinstance(source, bytes) else source
+    with Image.open(opened) as img:
         width, height = img.size
         exif = img.getexif()
 

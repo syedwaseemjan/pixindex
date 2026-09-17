@@ -5,10 +5,19 @@ import sys
 from dataclasses import dataclass
 from pathlib import Path
 
-from pixindex.db import ImageRow, connect, fingerprint, upsert
-from pixindex.metadata import read_metadata
+from pixindex.db import ImageRow, connect, lookup, upsert
+from pixindex.metadata import EXTENSIONS, JPEG_EXTENSIONS, read_metadata
+from pixindex.s3 import (
+    JPEG_RANGE,
+    S3Error,
+    S3Object,
+    normalize_s3_source,
+    parse_s3_uri,
+)
 
-EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
+
+class IndexSourceError(Exception):
+    """The folder or s3:// URI cannot be indexed."""
 
 
 @dataclass
@@ -18,6 +27,15 @@ class IndexResult:
     failed: int = 0
 
 
+def index_source(source: str, db_path: Path, store=None) -> IndexResult:
+    if source.startswith("s3://"):
+        return index_s3(source, db_path, store=store)
+    path = Path(source).expanduser()
+    if not path.exists():
+        raise IndexSourceError(f"Not found: {path}")
+    return index_local(path, db_path)
+
+
 def index_local(source: Path, db_path: Path) -> IndexResult:
     source = source.resolve()
     result = IndexResult()
@@ -25,7 +43,7 @@ def index_local(source: Path, db_path: Path) -> IndexResult:
     try:
         for path in iter_images(source):
             try:
-                if _index_one(conn, source, path):
+                if _index_local_one(conn, source, path):
                     result.indexed += 1
                 else:
                     result.skipped += 1
@@ -35,8 +53,40 @@ def index_local(source: Path, db_path: Path) -> IndexResult:
             _progress(result)
     finally:
         conn.close()
-        if result.indexed or result.skipped or result.failed:
-            print(file=sys.stderr)
+        _end_progress(result)
+    return result
+
+
+def index_s3(uri: str, db_path: Path, store=None) -> IndexResult:
+    from pixindex.s3 import BotoS3Store
+
+    try:
+        bucket, prefix = parse_s3_uri(uri)
+    except S3Error as exc:
+        raise IndexSourceError(str(exc)) from exc
+    source = normalize_s3_source(bucket, prefix)
+    client = store if store is not None else BotoS3Store()
+    try:
+        objects = client.list_images(bucket, prefix)
+    except S3Error as exc:
+        raise IndexSourceError(str(exc)) from exc
+
+    result = IndexResult()
+    conn = connect(db_path)
+    try:
+        for obj in objects:
+            try:
+                if _index_s3_one(conn, source, obj, client):
+                    result.indexed += 1
+                else:
+                    result.skipped += 1
+            except Exception as exc:
+                result.failed += 1
+                print(f"s3://{obj.bucket}/{obj.key}: {exc}", file=sys.stderr)
+            _progress(result)
+    finally:
+        conn.close()
+        _end_progress(result)
     return result
 
 
@@ -55,20 +105,66 @@ def iter_images(source: Path) -> list[Path]:
     return paths
 
 
-def _index_one(conn, source: Path, path: Path) -> bool:
+def _index_local_one(conn, source: Path, path: Path) -> bool:
     stat = path.stat()
     uri = str(path.resolve())
-    existing = fingerprint(conn, uri)
-    if existing == (stat.st_size, stat.st_mtime_ns):
+    existing = lookup(conn, uri)
+    if existing is not None and (existing["size"], existing["mtime_ns"]) == (
+        stat.st_size,
+        stat.st_mtime_ns,
+    ):
         return False
-    meta = read_metadata(path)
+    _save(conn, source=str(source), uri=uri, size=stat.st_size, mtime_ns=stat.st_mtime_ns, meta=read_metadata(path))
+    return True
+
+
+def _index_s3_one(conn, source: str, obj: S3Object, store) -> bool:
+    uri = f"s3://{obj.bucket}/{obj.key}"
+    existing = lookup(conn, uri)
+    if existing is not None and existing["etag"] == obj.etag and existing["size"] == obj.size:
+        return False
+    meta = read_metadata(_s3_bytes(store, obj))
+    _save(
+        conn,
+        source=source,
+        uri=uri,
+        size=obj.size,
+        mtime_ns=0,
+        meta=meta,
+        etag=obj.etag,
+    )
+    return True
+
+
+def _s3_bytes(store, obj: S3Object) -> bytes:
+    suffix = Path(obj.key).suffix.lower()
+    if suffix in JPEG_EXTENSIONS:
+        header = store.get_bytes(obj, JPEG_RANGE)
+        try:
+            read_metadata(header)
+            return header
+        except Exception:
+            return store.get_bytes(obj)
+    return store.get_bytes(obj)
+
+
+def _save(
+    conn,
+    *,
+    source: str,
+    uri: str,
+    size: int,
+    mtime_ns: int,
+    meta,
+    etag: str | None = None,
+) -> None:
     upsert(
         conn,
         ImageRow(
             uri=uri,
-            source=str(source),
-            size=stat.st_size,
-            mtime_ns=stat.st_mtime_ns,
+            source=source,
+            size=size,
+            mtime_ns=mtime_ns,
             width=meta.width,
             height=meta.height,
             captured_at=meta.captured_at,
@@ -77,9 +173,9 @@ def _index_one(conn, source: Path, path: Path) -> bool:
             has_gps=meta.has_gps,
             gps_lat=meta.gps_lat,
             gps_lon=meta.gps_lon,
+            etag=etag,
         ),
     )
-    return True
 
 
 def _progress(result: IndexResult) -> None:
@@ -89,3 +185,8 @@ def _progress(result: IndexResult) -> None:
         file=sys.stderr,
         flush=True,
     )
+
+
+def _end_progress(result: IndexResult) -> None:
+    if result.indexed or result.skipped or result.failed:
+        print(file=sys.stderr)

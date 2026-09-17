@@ -4,7 +4,7 @@ pixindex looks through your pictures and writes down the useful facts about each
 
 You run it in the terminal. It does not start a website, a queue, or a background service.
 
-Right now it only works on pictures already on your computer. Amazon S3 is not ready yet.
+It works on a folder on your computer, or on pictures in an Amazon S3 bucket.
 
 ## What it does today
 
@@ -49,6 +49,14 @@ Or index one picture:
 ```bash
 pixindex --db ./catalog.sqlite index ./photos/beach.jpg
 ```
+
+Or an S3 prefix. pixindex uses your normal AWS credentials (`AWS_PROFILE` or `AWS_ACCESS_KEY_ID`). It does not change objects in the bucket.
+
+```bash
+pixindex --db ./catalog.sqlite index s3://my-bucket/photos/2024/
+```
+
+JPEG files on S3 are read from the start of the object only, enough to get the metadata. PNG and WebP are downloaded in full. The next run skips objects whose ETag has not changed.
 
 When it finishes you will see something like:
 
@@ -136,11 +144,14 @@ Export accepts the same filters as search. An empty result is still a valid file
 
 Anything other than `csv` or `json` is an error.
 
-## What is not ready
+`--source` also works with an S3 prefix you already indexed:
 
 ```bash
-pixindex index s3://my-bucket/photos/
+pixindex --db ./catalog.sqlite search --source s3://my-bucket/photos/2024
+pixindex --db ./catalog.sqlite stat --source s3://my-bucket/photos/2024
 ```
+
+If AWS credentials are missing, or the bucket cannot be listed, pixindex says so and exits. A single unreadable object is one error line; the rest continue.
 
 ## Tests
 

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS images (
     has_gps INTEGER NOT NULL DEFAULT 0,
     gps_lat REAL,
     gps_lon REAL,
+    etag TEXT,
     indexed_at TEXT NOT NULL
 );
 
@@ -41,6 +42,7 @@ class ImageRow:
     has_gps: bool
     gps_lat: float | None
     gps_lon: float | None
+    etag: str | None = None
 
 
 def default_db_path() -> Path:
@@ -60,14 +62,26 @@ def connect(db_path: Path) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
 
 
-def fingerprint(conn: sqlite3.Connection, uri: str) -> tuple[int, int] | None:
-    row = conn.execute(
-        "SELECT size, mtime_ns FROM images WHERE uri = ?",
+def _migrate(conn: sqlite3.Connection) -> None:
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(images)")}
+    if "etag" not in columns:
+        conn.execute("ALTER TABLE images ADD COLUMN etag TEXT")
+        conn.commit()
+
+
+def lookup(conn: sqlite3.Connection, uri: str) -> sqlite3.Row | None:
+    return conn.execute(
+        "SELECT size, mtime_ns, etag FROM images WHERE uri = ?",
         (uri,),
     ).fetchone()
+
+
+def fingerprint(conn: sqlite3.Connection, uri: str) -> tuple[int, int] | None:
+    row = lookup(conn, uri)
     if row is None:
         return None
     return int(row["size"]), int(row["mtime_ns"])
@@ -79,8 +93,8 @@ def upsert(conn: sqlite3.Connection, row: ImageRow) -> None:
         """
         INSERT INTO images (
             uri, source, size, mtime_ns, width, height, captured_at,
-            camera_make, camera_model, has_gps, gps_lat, gps_lon, indexed_at
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            camera_make, camera_model, has_gps, gps_lat, gps_lon, etag, indexed_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(uri) DO UPDATE SET
             source = excluded.source,
             size = excluded.size,
@@ -93,6 +107,7 @@ def upsert(conn: sqlite3.Connection, row: ImageRow) -> None:
             has_gps = excluded.has_gps,
             gps_lat = excluded.gps_lat,
             gps_lon = excluded.gps_lon,
+            etag = excluded.etag,
             indexed_at = excluded.indexed_at
         """,
         (
@@ -108,6 +123,7 @@ def upsert(conn: sqlite3.Connection, row: ImageRow) -> None:
             int(row.has_gps),
             row.gps_lat,
             row.gps_lon,
+            row.etag,
             now,
         ),
     )

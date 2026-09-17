@@ -21,10 +21,25 @@ def test_version() -> None:
     assert result.stdout.strip() == "0.1.0"
 
 
-def test_index_s3_is_not_implemented() -> None:
-    result = runner.invoke(app, ["index", "s3://bucket/photos"])
+def test_index_s3_uses_store(monkeypatch, tmp_path: Path) -> None:
+    from pixindex.index import IndexResult
+
+    def fake_index_source(source: str, db_path, store=None):
+        assert source == "s3://bucket/photos"
+        return IndexResult(indexed=3, skipped=1, failed=0)
+
+    monkeypatch.setattr("pixindex.cli.index_source", fake_index_source)
+    result = runner.invoke(
+        app, ["--db", str(tmp_path / "index.sqlite"), "index", "s3://bucket/photos"]
+    )
+    assert result.exit_code == 0
+    assert "Indexed 3, skipped 1, failed 0." in result.stdout
+
+
+def test_index_s3_bad_uri() -> None:
+    result = runner.invoke(app, ["index", "s3://"])
     assert result.exit_code == 1
-    assert "S3 is not implemented yet" in result.stderr
+    assert "bucket" in result.stderr
 
 
 def test_index_missing_path(tmp_path: Path) -> None:

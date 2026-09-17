@@ -6,6 +6,8 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
+from pixindex.s3 import S3Error, normalize_s3_source, parse_s3_uri
+
 _SIZE = re.compile(r"^\s*(\d+(?:\.\d+)?)\s*([a-zA-Z]*)\s*$")
 _SIZE_UNITS = {
     "": 1,
@@ -37,6 +39,12 @@ class Filters:
 def resolve_source(source: str | None) -> str | None:
     if source is None:
         return None
+    if source.startswith("s3://"):
+        try:
+            bucket, prefix = parse_s3_uri(source)
+        except S3Error as exc:
+            raise QueryError(str(exc)) from exc
+        return normalize_s3_source(bucket, prefix)
     return str(Path(source).expanduser().resolve())
 
 

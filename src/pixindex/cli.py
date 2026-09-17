@@ -6,7 +6,7 @@ import typer
 
 from pixindex import __version__
 from pixindex.db import connect, resolve_db_path
-from pixindex.index import index_local
+from pixindex.index import IndexSourceError, index_source
 from pixindex.export import parse_format, render_export, search_rows
 from pixindex.query import QueryError, parse_filters, search_uris
 from pixindex.stat import catalog_stats, format_stats
@@ -50,17 +50,11 @@ def index(
     source: str = typer.Argument(help="Local folder or s3://bucket/prefix."),
 ) -> None:
     """Walk a local folder or S3 prefix and catalog images."""
-    if source.startswith("s3://"):
-        typer.echo("S3 is not implemented yet.", err=True)
-        raise typer.Exit(code=1)
-
-    path = Path(source).expanduser()
-    if not path.exists():
-        typer.echo(f"Not found: {path}", err=True)
-        raise typer.Exit(code=1)
-
     try:
-        result = index_local(path, ctx.obj["db"])
+        result = index_source(source, ctx.obj["db"])
+    except IndexSourceError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
     except KeyboardInterrupt:
         typer.echo(
             "Stopped. Already saved rows stay in the catalog.",
