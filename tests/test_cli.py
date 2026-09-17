@@ -92,3 +92,23 @@ def test_search_bad_date(tmp_path: Path) -> None:
     )
     assert result.exit_code == 1
     assert "YYYY-MM-DD" in result.stderr
+
+
+def test_export_csv(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    Image.new("RGB", (8, 8), color="red").save(photos / "shot.png")
+    db = tmp_path / "index.sqlite"
+
+    runner.invoke(app, ["--db", str(db), "index", str(photos)])
+    result = runner.invoke(app, ["--db", str(db), "export", "csv"])
+
+    assert result.exit_code == 0
+    assert result.stdout.startswith("uri,source,size,")
+    assert "shot.png" in result.stdout
+
+
+def test_export_bad_format(tmp_path: Path) -> None:
+    result = runner.invoke(app, ["--db", str(tmp_path / "x.sqlite"), "export", "xlsx"])
+    assert result.exit_code == 1
+    assert "csv or json" in result.stderr

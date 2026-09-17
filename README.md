@@ -120,10 +120,25 @@ No matches means no output. That is normal.
 
 If a date or size does not look right, pixindex says so and exits.
 
+## Export
+
+Export writes the same matches as search, as a table. It prints to the terminal. Redirect it to a file if you want to keep it.
+
+```bash
+pixindex --db ./catalog.sqlite export csv > inventory.csv
+pixindex --db ./catalog.sqlite export json > inventory.json
+pixindex --db ./catalog.sqlite export csv --camera Nikon --has-gps > nikon-gps.csv
+```
+
+`csv` is for a spreadsheet. `json` is for a script. The columns are path, folder, size, width, height, date taken, camera, and GPS.
+
+Export accepts the same filters as search. An empty result is still a valid file: CSV has only the header row, JSON is `[]`.
+
+Anything other than `csv` or `json` is an error.
+
 ## What is not ready
 
 ```bash
-pixindex export csv
 pixindex index s3://my-bucket/photos/
 ```
 

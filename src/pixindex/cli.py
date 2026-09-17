@@ -7,6 +7,7 @@ import typer
 from pixindex import __version__
 from pixindex.db import connect, resolve_db_path
 from pixindex.index import index_local
+from pixindex.export import parse_format, render_export, search_rows
 from pixindex.query import QueryError, parse_filters, search_uris
 from pixindex.stat import catalog_stats, format_stats
 
@@ -130,10 +131,49 @@ def stat(
 
 @app.command()
 def export(
+    ctx: typer.Context,
     output_format: str = typer.Argument(help="csv or json.", metavar="FORMAT"),
+    camera: str | None = typer.Option(
+        None, help="Camera make or model contains this text."
+    ),
+    after: str | None = typer.Option(
+        None, help="Captured on or after this date (YYYY-MM-DD)."
+    ),
+    before: str | None = typer.Option(
+        None, help="Captured on or before this date (YYYY-MM-DD)."
+    ),
+    has_gps: bool | None = typer.Option(
+        None,
+        "--has-gps/--no-gps",
+        help="Only images with or without GPS.",
+    ),
+    ext: str | None = typer.Option(None, help="File extension, for example jpg."),
+    min_size: str | None = typer.Option(
+        None, help="Minimum file size, for example 5mb."
+    ),
+    source: str | None = typer.Option(None, help="Limit to one indexed folder."),
 ) -> None:
     """Write matching rows to csv or json."""
-    _not_implemented("export")
+    try:
+        fmt = parse_format(output_format)
+    except QueryError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+    filters = _filters(
+        source=source,
+        camera=camera,
+        after=after,
+        before=before,
+        has_gps=has_gps,
+        ext=ext,
+        min_size=min_size,
+    )
+    conn = _open_catalog(ctx)
+    try:
+        body = render_export(search_rows(conn, filters), fmt)
+    finally:
+        conn.close()
+    typer.echo(body, nl=False)
 
 
 def _open_catalog(ctx: typer.Context):
@@ -153,8 +193,3 @@ def _filters(**kwargs):
     except QueryError as exc:
         typer.echo(str(exc), err=True)
         raise typer.Exit(code=1) from exc
-
-
-def _not_implemented(command: str) -> None:
-    typer.echo(f"{command} is not implemented yet.", err=True)
-    raise typer.Exit(code=1)
