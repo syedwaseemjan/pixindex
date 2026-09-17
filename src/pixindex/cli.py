@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import typer
 
 from pixindex import __version__
+from pixindex.db import resolve_db_path
+from pixindex.index import index_local
 
 app = typer.Typer(
     no_args_is_help=True,
@@ -18,6 +22,12 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def main(
+    ctx: typer.Context,
+    db: Path | None = typer.Option(
+        None,
+        "--db",
+        help="SQLite catalog path. Defaults to ~/.local/share/pixindex/index.sqlite.",
+    ),
     version: bool = typer.Option(
         False,
         "--version",
@@ -27,14 +37,37 @@ def main(
     ),
 ) -> None:
     """Index pictures in a folder or S3 prefix."""
+    ctx.ensure_object(dict)
+    ctx.obj["db"] = resolve_db_path(db)
 
 
 @app.command()
 def index(
+    ctx: typer.Context,
     source: str = typer.Argument(help="Local folder or s3://bucket/prefix."),
 ) -> None:
     """Walk a local folder or S3 prefix and catalog images."""
-    _not_implemented("index")
+    if source.startswith("s3://"):
+        typer.echo("S3 is not implemented yet.", err=True)
+        raise typer.Exit(code=1)
+
+    path = Path(source).expanduser()
+    if not path.exists():
+        typer.echo(f"Not found: {path}", err=True)
+        raise typer.Exit(code=1)
+
+    try:
+        result = index_local(path, ctx.obj["db"])
+    except KeyboardInterrupt:
+        typer.echo(
+            "Stopped. Already saved rows stay in the catalog.",
+            err=True,
+        )
+        raise typer.Exit(code=130) from None
+
+    typer.echo(
+        f"Indexed {result.indexed}, skipped {result.skipped}, failed {result.failed}."
+    )
 
 
 @app.command()

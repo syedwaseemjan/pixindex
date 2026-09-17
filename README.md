@@ -3,11 +3,13 @@
 Index pictures in a folder or S3 prefix. Query the catalog. Export it.
 
 ```bash
-pixindex index s3://bucket/shoots/2024/
+pixindex --db ./catalog.sqlite index ./photos
 pixindex stat
 pixindex search --camera Nikon --has-gps
 pixindex export csv
 ```
+
+`index` works on a local folder or a single image. JPEG, PNG, and WebP. Unchanged files are skipped on the next run. S3 is not implemented yet.
 
 A CLI. No server, no queue, no daemon.
 
