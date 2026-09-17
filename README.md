@@ -1,29 +1,98 @@
 # pixindex
 
-Index pictures in a folder or S3 prefix. Query the catalog. Export it.
+pixindex looks through your pictures and writes down the useful facts about each one: size, camera, date, and whether the photo has a GPS location.
 
-```bash
-pixindex --db ./catalog.sqlite index ./photos
-pixindex stat
-pixindex search --camera Nikon --has-gps
-pixindex export csv
-```
+You run it in the terminal. It does not start a website, a queue, or a background service.
 
-`index` works on a local folder or a single image. JPEG, PNG, and WebP. Unchanged files are skipped on the next run. S3 is not implemented yet.
+Right now it only works on pictures already on your computer. Amazon S3, search, and summaries are not ready yet.
 
-A CLI. No server, no queue, no daemon.
+## What it does today
 
-## Requirements
+Point it at a folder. It finds `.jpg`, `.jpeg`, `.png`, and `.webp` files.
 
-Python 3.12 or newer.
+For each picture it saves:
 
-## Install from source
+- the full path
+- file size
+- width and height
+- camera make and model, if the file has that data
+- when the photo was taken, if the file has that data
+- GPS coordinates, if the file has them
 
-On Ubuntu, install `python3.12-venv` first if `python3.12 -m venv` fails.
+That list is stored in a single SQLite file on your machine. Think of it as a notebook, not a photo library. pixindex does not move, copy, or change your pictures.
+
+Hidden files (names that start with `.`) and folders that start with `.` are skipped.
+
+## Install
+
+You need Python 3.12 or newer.
+
+On Ubuntu, if `python3.12 -m venv` fails, run `sudo apt install python3.12-venv` first.
 
 ```bash
 python3.12 -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e .
 pixindex --help
+```
+
+## Use it
+
+Index a folder and keep the notebook in the current directory:
+
+```bash
+pixindex --db ./catalog.sqlite index ./photos
+```
+
+Or index one picture:
+
+```bash
+pixindex --db ./catalog.sqlite index ./photos/beach.jpg
+```
+
+When it finishes you will see something like:
+
+```text
+Indexed 12, skipped 0, failed 0.
+```
+
+- **indexed** — new or changed pictures written to the notebook
+- **skipped** — already in the notebook, and the file has not changed
+- **failed** — not a readable image; pixindex prints the path and continues
+
+If you press `Ctrl+C`, it stops. Pictures it already saved stay in the notebook. Run the same command again to continue. Unchanged files are skipped.
+
+If you leave out `--db`, the notebook is stored at:
+
+```text
+~/.local/share/pixindex/index.sqlite
+```
+
+## Run it again
+
+Same folder, same `--db`:
+
+```bash
+pixindex --db ./catalog.sqlite index ./photos
+```
+
+pixindex only re-reads a file if the size or the last-modified time changed. A large folder is slow the first time. Later runs are mostly a quick check.
+
+## What is not ready
+
+These commands exist so you can see the plan, but they do not work yet:
+
+```bash
+pixindex stat
+pixindex search --camera Nikon --has-gps
+pixindex export csv
+pixindex index s3://my-bucket/photos/
+```
+
+## Tests
+
+```bash
+source .venv/bin/activate
+pip install -e ".[dev]"
+pytest
 ```
