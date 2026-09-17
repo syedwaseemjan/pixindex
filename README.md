@@ -1,136 +1,114 @@
 # pixindex
 
-pixindex looks through your pictures and writes down the useful facts about each one: size, camera, date, and whether the photo has a GPS location.
+Index pictures in a folder or an S3 prefix. Search the catalog. Export it.
 
-You run it in the terminal. It does not start a website, a queue, or a background service.
+A CLI. No server, no queue, no daemon. It does not move, copy, or change your pictures.
 
-It works on a folder on your computer, or on pictures in an Amazon S3 bucket.
+```bash
+pipx install pixindex
 
-## What it does today
+pixindex --db ./catalog.sqlite index ./photos
+pixindex --db ./catalog.sqlite stat
+pixindex --db ./catalog.sqlite search --camera Nikon --has-gps
+pixindex --db ./catalog.sqlite export csv > inventory.csv
+```
 
-Point it at a folder. It finds `.jpg`, `.jpeg`, `.png`, and `.webp` files.
+## What it records
 
-For each picture it saves:
+It finds `.jpg`, `.jpeg`, `.png`, and `.webp` files. Hidden files and folders (names that start with `.`) are skipped. HEIC and RAW are not supported.
 
-- the full path
-- file size
-- width and height
-- camera make and model, if the file has that data
-- when the photo was taken, if the file has that data
-- GPS coordinates, if the file has them
+For each picture it stores:
 
-That list is stored in a single SQLite file on your machine. Think of it as a notebook, not a photo library. pixindex does not move, copy, or change your pictures.
+- the full path, or `s3://bucket/key`
+- file size, width, and height
+- camera make and model, if present
+- date taken, if present
+- GPS coordinates, if present
 
-Hidden files (names that start with `.`) and folders that start with `.` are skipped.
+That list lives in a SQLite file on your machine. It is a notebook, not a photo library.
+
+If you omit `--db`, the notebook is:
+
+```text
+~/.local/share/pixindex/index.sqlite
+```
 
 ## Install
 
-You need Python 3.12 or newer.
-
-On Ubuntu, if `python3.12 -m venv` fails, run `sudo apt install python3.12-venv` first.
+Python 3.12 or newer.
 
 ```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-pip install -e .
+pipx install pixindex
 pixindex --help
 ```
 
-## Use it
+Or with pip:
 
-Index a folder and keep the notebook in the current directory:
+```bash
+pip install pixindex
+```
+
+## Index
+
+A folder, one file, or an S3 prefix:
 
 ```bash
 pixindex --db ./catalog.sqlite index ./photos
-```
-
-Or index one picture:
-
-```bash
 pixindex --db ./catalog.sqlite index ./photos/beach.jpg
-```
-
-Or an S3 prefix. pixindex uses your normal AWS credentials (`AWS_PROFILE` or `AWS_ACCESS_KEY_ID`). It does not change objects in the bucket.
-
-```bash
 pixindex --db ./catalog.sqlite index s3://my-bucket/photos/2024/
 ```
 
-JPEG files on S3 are read from the start of the object only, enough to get the metadata. PNG and WebP are downloaded in full. The next run skips objects whose ETag has not changed.
+S3 uses your normal AWS credentials (`AWS_PROFILE` or `AWS_ACCESS_KEY_ID`). Objects in the bucket are not changed. JPEGs are read from the start of the object only, enough for metadata. PNG and WebP are downloaded in full.
 
-When it finishes you will see something like:
+When it finishes:
 
 ```text
 Indexed 12, skipped 0, failed 0.
 ```
 
 - **indexed** — new or changed pictures written to the notebook
-- **skipped** — already in the notebook, and the file has not changed
-- **failed** — not a readable image; pixindex prints the path and continues
+- **skipped** — already there, and the file has not changed
+- **failed** — not readable; pixindex prints the path and continues
 
-If you press `Ctrl+C`, it stops. Pictures it already saved stay in the notebook. Run the same command again to continue. Unchanged files are skipped.
+`Ctrl+C` stops the run. Rows already saved stay. Run the same command again; unchanged files are skipped. Local files skip on size and last-modified time. S3 objects skip on ETag.
 
-If you leave out `--db`, the notebook is stored at:
+A first run over a large folder or prefix can take a while. Later runs are mostly a check.
 
-```text
-~/.local/share/pixindex/index.sqlite
-```
+If AWS credentials are missing, or the bucket cannot be listed, pixindex says so and exits.
 
-## Run it again
-
-Same folder, same `--db`:
-
-```bash
-pixindex --db ./catalog.sqlite index ./photos
-```
-
-pixindex only re-reads a file if the size or the last-modified time changed. A large folder is slow the first time. Later runs are mostly a quick check.
-
-## See a summary
-
-Use the same `--db` as when you indexed:
+## Stat
 
 ```bash
 pixindex --db ./catalog.sqlite stat
-```
-
-You get a short report: how many pictures, how much space they take, the date range, how many have GPS, and which cameras showed up.
-
-To summarize only one folder you already indexed:
-
-```bash
 pixindex --db ./catalog.sqlite stat --source ./photos
 ```
 
-If you have not indexed anything yet, stat tells you that and exits.
+You get counts, total size, date range, how many have GPS, and which cameras showed up. If the catalog does not exist yet, stat says so and exits.
 
 ## Search
 
-Search prints one file path per line. Use the same `--db` as when you indexed.
+One path per line. A picture must match every flag you pass.
 
 ```bash
 pixindex --db ./catalog.sqlite search --camera Nikon --has-gps
 pixindex --db ./catalog.sqlite search --after 2024-06-01 --before 2024-08-31
 pixindex --db ./catalog.sqlite search --ext jpg --min-size 5mb
 pixindex --db ./catalog.sqlite search --source ./photos --no-gps
+pixindex --db ./catalog.sqlite search --source s3://my-bucket/photos/2024
 ```
 
-You can combine flags. A picture must match all of them.
-
-- `--camera` — make or model contains this text (`Nikon` matches `Nikon` or `NIKON Z8`)
-- `--after` / `--before` — date the photo was taken, `YYYY-MM-DD`. Both ends are included. Pictures with no date are left out.
+- `--camera` — make or model contains this text
+- `--after` / `--before` — date taken, `YYYY-MM-DD`. Both days are included. Pictures with no date are left out
 - `--has-gps` / `--no-gps` — has a location, or does not
-- `--ext` — file type, for example `jpg` or `png`. `jpg` also matches `.jpeg`
-- `--min-size` — smallest file size, for example `5mb` or `200kb`
-- `--source` — only pictures from one folder you already indexed
+- `--ext` — file type (`jpg` also matches `.jpeg`)
+- `--min-size` — smallest file, for example `5mb`
+- `--source` — only one folder or S3 prefix you already indexed
 
-No matches means no output. That is normal.
-
-If a date or size does not look right, pixindex says so and exits.
+No matches means no output. A bad date or size is an error.
 
 ## Export
 
-Export writes the same matches as search, as a table. It prints to the terminal. Redirect it to a file if you want to keep it.
+Same filters as search. Prints to the terminal; redirect to keep a file.
 
 ```bash
 pixindex --db ./catalog.sqlite export csv > inventory.csv
@@ -138,25 +116,21 @@ pixindex --db ./catalog.sqlite export json > inventory.json
 pixindex --db ./catalog.sqlite export csv --camera Nikon --has-gps > nikon-gps.csv
 ```
 
-`csv` is for a spreadsheet. `json` is for a script. The columns are path, folder, size, width, height, date taken, camera, and GPS.
+`csv` is for a spreadsheet. `json` is for a script. Columns are path, folder, size, width, height, date taken, camera, and GPS.
 
-Export accepts the same filters as search. An empty result is still a valid file: CSV has only the header row, JSON is `[]`.
+An empty result is still valid: CSV is only the header, JSON is `[]`. Format must be `csv` or `json`.
 
-Anything other than `csv` or `json` is an error.
-
-`--source` also works with an S3 prefix you already indexed:
+## Development
 
 ```bash
-pixindex --db ./catalog.sqlite search --source s3://my-bucket/photos/2024
-pixindex --db ./catalog.sqlite stat --source s3://my-bucket/photos/2024
-```
-
-If AWS credentials are missing, or the bucket cannot be listed, pixindex says so and exits. A single unreadable object is one error line; the rest continue.
-
-## Tests
-
-```bash
+python3.12 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ```
+
+On Ubuntu, if `python3.12 -m venv` fails: `sudo apt install python3.12-venv`.
+
+## License
+
+MIT
