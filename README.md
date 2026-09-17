@@ -1,5 +1,7 @@
 # pixindex
 
+[![Tests](https://github.com/syedwaseemjan/pixindex/actions/workflows/tests.yml/badge.svg)](https://github.com/syedwaseemjan/pixindex/actions/workflows/tests.yml)
+
 Index pictures in a folder or an S3 prefix. Search the catalog. Export it.
 
 A CLI. No server, no queue, no daemon. It does not move, copy, or change your pictures.
