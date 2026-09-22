@@ -18,7 +18,7 @@ def test_help_lists_commands() -> None:
 def test_version() -> None:
     result = runner.invoke(app, ["--version"])
     assert result.exit_code == 0
-    assert result.stdout.strip() == "0.2.0"
+    assert result.stdout.strip() == "0.2.1"
 
 
 def test_index_s3_uses_store(monkeypatch, tmp_path: Path) -> None:
