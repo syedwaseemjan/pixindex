@@ -113,6 +113,13 @@ pixindex --db ./catalog.sqlite search --source ./photos --no-gps
 pixindex --db ./catalog.sqlite search --source s3://my-bucket/photos/2024
 ```
 
+Paths on your computer are absolute. S3 pictures are printed as `s3://` locations.
+
+```text
+/photos/beach.jpg
+/photos/2024/pier.jpg
+```
+
 - `--camera` — camera make or model contains this text
 - `--after` / `--before` — date the picture was taken, in `YYYY-MM-DD` format. Both days are included. Pictures with no date are left out
 - `--has-gps` / `--no-gps` — only pictures that have a location, or only pictures that do not
@@ -132,9 +139,34 @@ pixindex --db ./catalog.sqlite export json > inventory.json
 pixindex --db ./catalog.sqlite export csv --camera Nikon --has-gps > nikon-gps.csv
 ```
 
-Use `csv` if you want to open the file in a spreadsheet. Use `json` if you want to read it from a script. The columns are path, folder, size, width, height, date taken, camera, and GPS.
+Use `csv` if you want to open the file in a spreadsheet. Use `json` if you want to read it from a script. One CSV row looks like this:
 
-If no pictures match, the export is still valid. CSV will contain only the header row. JSON will be an empty list: `[]`. The format must be `csv` or `json`.
+```text
+uri,source,size,width,height,captured_at,camera_make,camera_model,has_gps,gps_lat,gps_lon
+/photos/beach.jpg,/photos,2400000,6000,4000,2024-07-14T15:02:11,Nikon,Z 6,true,33.6844,73.0479
+```
+
+The same picture as JSON:
+
+```json
+[
+  {
+    "uri": "/photos/beach.jpg",
+    "source": "/photos",
+    "size": 2400000,
+    "width": 6000,
+    "height": 4000,
+    "captured_at": "2024-07-14T15:02:11",
+    "camera_make": "Nikon",
+    "camera_model": "Z 6",
+    "has_gps": true,
+    "gps_lat": 33.6844,
+    "gps_lon": 73.0479
+  }
+]
+```
+
+`uri` is the picture. `source` is the folder or S3 location you indexed. Missing metadata is an empty CSV cell, or `null` in JSON. If no pictures match, the export is still valid. CSV will contain only the header row. JSON will be an empty list: `[]`. The format must be `csv` or `json`.
 
 ## Development
 
