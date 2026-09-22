@@ -56,3 +56,15 @@ def test_filters_run_before_the_words(tmp_path: Path) -> None:
 
     assert missing == 0
     assert [Path(match.uri).name for match in matches] == ["blue.png"]
+
+def test_pictures_without_a_list_are_counted(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    _save(photos / "red.png", "red")
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+
+    conn = connect(db)
+    matches, missing = search_pictures(conn, Filters(), "red", ColorEmbedder(), limit=5)
+    conn.close()
+    assert matches == []
+    assert missing == 1
