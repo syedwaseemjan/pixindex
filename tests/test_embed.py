@@ -16,6 +16,7 @@ def _png(path: Path, color: str = "red", size: tuple[int, int] = (16, 16)) -> No
     path.parent.mkdir(parents=True, exist_ok=True)
     Image.new("RGB", size, color).save(path)
 
+
 def test_second_run_skips_and_reads_nothing(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
     _png(photos / "a.png")
@@ -29,6 +30,7 @@ def test_second_run_skips_and_reads_nothing(tmp_path: Path) -> None:
     assert first.bytes_read > 0
     assert (second.embedded, second.skipped, second.failed, second.bytes_read) == (0, 1, 0, 0)
     assert "Model color." in format_embed_result(first, "color")
+
 
 def test_a_different_model_is_rebuilt(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
@@ -50,6 +52,7 @@ def test_a_different_model_is_rebuilt(tmp_path: Path) -> None:
     conn.close()
     assert model_id == "color"
 
+
 def test_reindex_drops_the_old_list(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
     image = photos / "a.png"
@@ -69,6 +72,7 @@ def test_reindex_drops_the_old_list(tmp_path: Path) -> None:
     again = embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
     assert again.embedded == 1
 
+
 def test_changed_file_is_not_embedded_until_reindex(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
     image = photos / "a.png"
@@ -81,6 +85,7 @@ def test_changed_file_is_not_embedded_until_reindex(tmp_path: Path) -> None:
     assert result.embedded == 0
     assert result.failed == 1
     assert result.bytes_read == 0
+
 
 def test_one_bad_file_does_not_stop_the_rest(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
@@ -103,3 +108,42 @@ def test_one_bad_file_does_not_stop_the_rest(tmp_path: Path) -> None:
     result = embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
     assert result.embedded == 1
     assert result.failed == 1
+
+
+def test_s3_reads_the_whole_object_once(tmp_path: Path) -> None:
+    buffer = BytesIO()
+    Image.new("RGB", (8, 8), "red").save(buffer, format="PNG")
+    data = buffer.getvalue()
+
+    class Store:
+        def __init__(self) -> None:
+            self.ranges: list[object] = []
+
+        def get_bytes(self, obj, byte_range=None) -> bytes:
+            self.ranges.append(byte_range)
+            assert obj.bucket == "bucket"
+            assert obj.key == "photos/a.png"
+            return data
+
+    db = tmp_path / "catalog.sqlite"
+    conn = connect(db)
+    conn.execute(
+        """
+        INSERT INTO images (
+            uri, source, size, mtime_ns, etag, has_gps, indexed_at
+        ) VALUES (?, ?, ?, 0, 'abc', 0, '2024-01-01T00:00:00+00:00')
+        """,
+        ("s3://bucket/photos/a.png", "s3://bucket/photos", len(data)),
+    )
+    conn.commit()
+    conn.close()
+
+    store = Store()
+    first = embed_catalog(db, ColorEmbedder(), Filters(), store=store, quiet=True)
+    second = embed_catalog(db, ColorEmbedder(), Filters(), store=store, quiet=True)
+
+    assert first.embedded == 1
+    assert first.bytes_read == len(data)
+    assert store.ranges == [None]
+    assert second.skipped == 1
+    assert store.ranges == [None]
