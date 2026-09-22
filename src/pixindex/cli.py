@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NoReturn
 
 import typer
 
 from pixindex import __version__
 from pixindex.db import connect, resolve_db_path
-from pixindex.index import IndexSourceError, index_source
+from pixindex.embed import embed_catalog, format_embed_result
+from pixindex.embedder import EmbedError, load_embedder
 from pixindex.export import parse_format, render_export, search_rows
+from pixindex.index import IndexSourceError, index_source
 from pixindex.query import QueryError, parse_filters, search_uris
 from pixindex.stat import catalog_stats, format_stats
 
@@ -65,6 +68,22 @@ def index(
     typer.echo(
         f"Indexed {result.indexed}, skipped {result.skipped}, failed {result.failed}."
     )
+
+
+@app.command()
+def embed(
+    ctx: typer.Context,
+    source: str | None = typer.Option(None, help="Limit to one indexed folder."),
+) -> None:
+    """Read pictures and save what they show, for word search."""
+    filters = _filters(source=source)
+    _require_catalog(ctx)
+    embedder = _embedder()
+    try:
+        result = embed_catalog(ctx.obj["db"], embedder, filters)
+    except KeyboardInterrupt:
+        _stopped()
+    typer.echo(format_embed_result(result, embedder.model_id))
 
 
 @app.command()
@@ -170,7 +189,23 @@ def export(
     typer.echo(body, nl=False)
 
 
-def _open_catalog(ctx: typer.Context):
+def _embedder():
+    try:
+        return load_embedder()
+    except EmbedError as exc:
+        typer.echo(str(exc), err=True)
+        raise typer.Exit(code=1) from exc
+
+
+def _stopped() -> NoReturn:
+    typer.echo(
+        "Stopped. Already saved rows stay in the catalog.",
+        err=True,
+    )
+    raise typer.Exit(code=130) from None
+
+
+def _require_catalog(ctx: typer.Context) -> None:
     db_path = ctx.obj["db"]
     if not db_path.is_file():
         typer.echo(
@@ -178,7 +213,11 @@ def _open_catalog(ctx: typer.Context):
             err=True,
         )
         raise typer.Exit(code=1)
-    return connect(db_path)
+
+
+def _open_catalog(ctx: typer.Context):
+    _require_catalog(ctx)
+    return connect(ctx.obj["db"])
 
 
 def _filters(**kwargs):
