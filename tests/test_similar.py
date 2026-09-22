@@ -27,6 +27,7 @@ def _ready(tmp_path: Path) -> tuple[Path, Path]:
     embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
     return photos, db
 
+
 def test_words_rank_the_closer_color(tmp_path: Path) -> None:
     _photos, db = _ready(tmp_path)
     conn = connect(db)
@@ -37,6 +38,7 @@ def test_words_rank_the_closer_color(tmp_path: Path) -> None:
     assert Path(matches[0].uri).name == "red.png"
     assert Path(matches[1].uri).name == "blue.png"
     assert matches[0].score > matches[1].score
+
 
 def test_filters_run_before_the_words(tmp_path: Path) -> None:
     _photos, db = _ready(tmp_path)
@@ -57,6 +59,7 @@ def test_filters_run_before_the_words(tmp_path: Path) -> None:
     assert missing == 0
     assert [Path(match.uri).name for match in matches] == ["blue.png"]
 
+
 def test_pictures_without_a_list_are_counted(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
     _save(photos / "red.png", "red")
@@ -68,6 +71,7 @@ def test_pictures_without_a_list_are_counted(tmp_path: Path) -> None:
     conn.close()
     assert matches == []
     assert missing == 1
+
 
 def test_an_old_model_is_not_used(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
@@ -90,3 +94,18 @@ def test_an_old_model_is_not_used(tmp_path: Path) -> None:
     conn.close()
     assert matches == []
     assert missing == 1
+
+
+def test_limit_keeps_the_best_matches(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    _save(photos / "red.png", "red")
+    _save(photos / "blue.png", "blue")
+    _save(photos / "green.png", "green")
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+    embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
+
+    conn = connect(db)
+    matches, _missing = search_pictures(conn, Filters(), "red", ColorEmbedder(), limit=1)
+    conn.close()
+    assert [Path(match.uri).name for match in matches] == ["red.png"]
