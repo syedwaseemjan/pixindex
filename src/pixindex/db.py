@@ -129,6 +129,35 @@ def fresh_embedding(conn: sqlite3.Connection, uri: str, model_id: str) -> bool:
     return row is not None
 
 
+def save_embedding(
+    conn: sqlite3.Connection,
+    *,
+    uri: str,
+    model_id: str,
+    vector: bytes,
+    size: int,
+    mtime_ns: int,
+    etag: str | None,
+) -> None:
+    now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    conn.execute(
+        """
+        INSERT INTO embeddings (
+            uri, model_id, vector, size, mtime_ns, etag, embedded_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(uri) DO UPDATE SET
+            model_id = excluded.model_id,
+            vector = excluded.vector,
+            size = excluded.size,
+            mtime_ns = excluded.mtime_ns,
+            etag = excluded.etag,
+            embedded_at = excluded.embedded_at
+        """,
+        (uri, model_id, vector, size, mtime_ns, etag, now),
+    )
+    conn.commit()
+
+
 def upsert(conn: sqlite3.Connection, row: ImageRow) -> None:
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     conn.execute(
