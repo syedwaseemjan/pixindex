@@ -68,3 +68,16 @@ def test_reindex_drops_the_old_list(tmp_path: Path) -> None:
 
     again = embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
     assert again.embedded == 1
+
+def test_changed_file_is_not_embedded_until_reindex(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    image = photos / "a.png"
+    _png(image)
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+
+    _png(image, color="blue", size=(24, 8))
+    result = embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
+    assert result.embedded == 0
+    assert result.failed == 1
+    assert result.bytes_read == 0
