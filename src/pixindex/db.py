@@ -105,6 +105,30 @@ def fingerprint(conn: sqlite3.Connection, uri: str) -> tuple[int, int] | None:
     return int(row["size"]), int(row["mtime_ns"])
 
 
+_FRESH = """
+    embeddings.size = images.size
+    AND embeddings.mtime_ns = images.mtime_ns
+    AND (
+        (embeddings.etag IS NULL AND images.etag IS NULL)
+        OR embeddings.etag = images.etag
+    )
+"""
+
+def fresh_embedding(conn: sqlite3.Connection, uri: str, model_id: str) -> bool:
+    row = conn.execute(
+        f"""
+        SELECT 1
+        FROM embeddings
+        JOIN images ON images.uri = embeddings.uri
+        WHERE embeddings.uri = ?
+          AND embeddings.model_id = ?
+          AND {_FRESH}
+        """,
+        (uri, model_id),
+    ).fetchone()
+    return row is not None
+
+
 def upsert(conn: sqlite3.Connection, row: ImageRow) -> None:
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     conn.execute(
