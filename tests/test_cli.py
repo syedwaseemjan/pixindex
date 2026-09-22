@@ -149,6 +149,24 @@ def test_embed_and_word_search(tmp_path: Path, monkeypatch) -> None:
     assert "blue.png" not in found.stdout
 
 
+def test_word_search_without_embed_explains_why(tmp_path: Path, monkeypatch) -> None:
+    from pixindex.embedder import EmbedError
+
+    def missing():
+        raise EmbedError("Picture search needs an extra install: pip install 'pixindex[embed]'")
+
+    monkeypatch.setattr("pixindex.cli.load_embedder", missing)
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    Image.new("RGB", (8, 8), color="red").save(photos / "shot.png")
+    db = tmp_path / "index.sqlite"
+    runner.invoke(app, ["--db", str(db), "index", str(photos)])
+
+    result = runner.invoke(app, ["--db", str(db), "search", "red"])
+    assert result.exit_code == 1
+    assert "pixindex[embed]" in result.stderr
+
+
 def test_export_bad_format(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--db", str(tmp_path / "x.sqlite"), "export", "xlsx"])
     assert result.exit_code == 1
