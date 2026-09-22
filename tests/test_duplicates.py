@@ -37,3 +37,15 @@ def test_copies_group_and_a_different_shape_does_not(tmp_path: Path) -> None:
     assert second.skipped == 3
     assert second.bytes_read == 0
     assert len(second.groups) == 1
+
+def test_distance_zero_groups_only_identical_fingerprints(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    _bar(photos / "left.png", (64, 64), (0, 0, 31, 63))
+    _bar(photos / "left-copy.png", (64, 64), (0, 0, 31, 63))
+    _bar(photos / "right.png", (64, 64), (32, 0, 63, 63))
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+
+    result = find_duplicates(db, Filters(), distance=0, quiet=True)
+    assert len(result.groups) == 1
+    assert {Path(uri).name for uri in result.groups[0]} == {"left-copy.png", "left.png"}
