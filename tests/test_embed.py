@@ -49,3 +49,22 @@ def test_a_different_model_is_rebuilt(tmp_path: Path) -> None:
     model_id = conn.execute("SELECT model_id FROM embeddings").fetchone()["model_id"]
     conn.close()
     assert model_id == "color"
+
+def test_reindex_drops_the_old_list(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    image = photos / "a.png"
+    _png(image)
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+    embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
+
+    _png(image, color="blue", size=(20, 10))
+    index_local(photos, db, quiet=True)
+
+    conn = connect(db)
+    count = conn.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+    conn.close()
+    assert count == 0
+
+    again = embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
+    assert again.embedded == 1
