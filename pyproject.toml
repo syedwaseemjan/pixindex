@@ -1,6 +1,6 @@
 [project]
 name = "pixindex"
-version = "0.1.0"
+version = "0.2.0"
 description = "Index pictures, search by what they show, find copies, and export the catalog."
 readme = "README.md"
 license = { text = "MIT" }
