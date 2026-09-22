@@ -12,6 +12,7 @@ from pixindex.embedder import EmbedError, load_embedder
 from pixindex.export import parse_format, render_export, search_rows
 from pixindex.index import IndexSourceError, index_source
 from pixindex.query import QueryError, parse_filters, search_uris
+from pixindex.similar import search_pictures
 from pixindex.stat import catalog_stats, format_stats
 
 app = typer.Typer(
@@ -89,6 +90,11 @@ def embed(
 @app.command()
 def search(
     ctx: typer.Context,
+    query: str | None = typer.Argument(
+        None,
+        help="What the picture shows, for example: red tent at dusk.",
+        metavar="TEXT",
+    ),
     camera: str | None = typer.Option(
         None, help="Camera make or model contains this text."
     ),
@@ -108,8 +114,12 @@ def search(
         None, help="Minimum file size, for example 5mb."
     ),
     source: str | None = typer.Option(None, help="Limit to one indexed folder."),
+    limit: int = typer.Option(
+        20,
+        help="How many pictures to print when searching by words.",
+    ),
 ) -> None:
-    """Filter the catalog and print matching paths."""
+    """Print matching paths. With TEXT, rank pictures by what they show."""
     filters = _filters(
         source=source,
         camera=camera,
@@ -121,8 +131,26 @@ def search(
     )
     conn = _open_catalog(ctx)
     try:
-        for uri in search_uris(conn, filters):
-            typer.echo(uri)
+        words = query.strip() if query else ""
+        if not words:
+            for uri in search_uris(conn, filters):
+                typer.echo(uri)
+            return
+        if limit < 1:
+            typer.echo("--limit must be 1 or greater.", err=True)
+            raise typer.Exit(code=1)
+        matches, missing = search_pictures(
+            conn, filters, words, _embedder(), limit
+        )
+        for match in matches:
+            typer.echo(match.uri)
+        if missing:
+            noun = "picture" if missing == 1 else "pictures"
+            typer.echo(
+                f"{missing} {noun} match the filters but have not been read "
+                "for picture search. Run pixindex embed.",
+                err=True,
+            )
     finally:
         conn.close()
 
