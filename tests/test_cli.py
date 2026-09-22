@@ -11,7 +11,7 @@ runner = CliRunner()
 def test_help_lists_commands() -> None:
     result = runner.invoke(app, ["--help"])
     assert result.exit_code == 0
-    for command in ("index", "search", "stat", "export"):
+    for command in ("index", "embed", "search", "stat", "export", "duplicates", "check"):
         assert command in result.stdout
 
 
@@ -190,6 +190,16 @@ def test_duplicates_rejects_a_negative_distance(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--db", str(db), "duplicates", "--distance", "-1"])
     assert result.exit_code == 1
     assert "--distance" in result.stderr
+
+
+def test_check_uses_the_stand_in_model(monkeypatch) -> None:
+    from color_embedder import ColorEmbedder
+
+    monkeypatch.setattr("pixindex.cli.load_embedder", ColorEmbedder)
+    result = runner.invoke(app, ["check"])
+    assert result.exit_code == 0
+    assert "Picture search: 2/2" in result.stdout
+    assert "Duplicates: 1/1" in result.stdout
 
 
 def test_export_bad_format(tmp_path: Path) -> None:
