@@ -7,6 +7,11 @@ import typer
 
 from pixindex import __version__
 from pixindex.db import connect, resolve_db_path
+from pixindex.duplicates import (
+    DEFAULT_DISTANCE,
+    find_duplicates,
+    format_duplicate_result,
+)
 from pixindex.embed import embed_catalog, format_embed_result
 from pixindex.embedder import EmbedError, load_embedder
 from pixindex.export import parse_format, render_export, search_rows
@@ -215,6 +220,33 @@ def export(
     finally:
         conn.close()
     typer.echo(body, nl=False)
+
+
+@app.command()
+def duplicates(
+    ctx: typer.Context,
+    source: str | None = typer.Option(None, help="Limit to one indexed folder."),
+    distance: int = typer.Option(
+        DEFAULT_DISTANCE,
+        help="How different two pictures can be and still count as copies. Lower is stricter.",
+    ),
+) -> None:
+    """Group copies of the same shot."""
+    if distance < 0:
+        typer.echo("--distance must be 0 or greater.", err=True)
+        raise typer.Exit(code=1)
+    filters = _filters(source=source)
+    _require_catalog(ctx)
+    try:
+        result = find_duplicates(ctx.obj["db"], filters, distance)
+    except KeyboardInterrupt:
+        _stopped()
+    for index, group in enumerate(result.groups):
+        if index:
+            typer.echo()
+        for uri in group:
+            typer.echo(uri)
+    typer.echo(format_duplicate_result(result), err=True)
 
 
 def _embedder():
