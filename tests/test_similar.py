@@ -37,3 +37,22 @@ def test_words_rank_the_closer_color(tmp_path: Path) -> None:
     assert Path(matches[0].uri).name == "red.png"
     assert Path(matches[1].uri).name == "blue.png"
     assert matches[0].score > matches[1].score
+
+def test_filters_run_before_the_words(tmp_path: Path) -> None:
+    _photos, db = _ready(tmp_path)
+    conn = connect(db)
+    conn.execute(
+        "UPDATE images SET camera_make = 'Canon' WHERE uri LIKE ?",
+        ("%/blue.png",),
+    )
+    conn.execute(
+        "UPDATE images SET camera_make = 'Nikon' WHERE uri LIKE ?",
+        ("%/red.png",),
+    )
+    conn.commit()
+    filters = parse_filters(camera="Canon")
+    matches, missing = search_pictures(conn, filters, "red", ColorEmbedder(), limit=5)
+    conn.close()
+
+    assert missing == 0
+    assert [Path(match.uri).name for match in matches] == ["blue.png"]
