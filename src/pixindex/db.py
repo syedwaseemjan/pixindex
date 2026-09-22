@@ -114,6 +114,16 @@ _FRESH = """
     )
 """
 
+_FRESH_HASH = """
+    picture_hashes.size = images.size
+    AND picture_hashes.mtime_ns = images.mtime_ns
+    AND (
+        (picture_hashes.etag IS NULL AND images.etag IS NULL)
+        OR picture_hashes.etag = images.etag
+    )
+"""
+
+
 def fresh_embedding(conn: sqlite3.Connection, uri: str, model_id: str) -> bool:
     row = conn.execute(
         f"""
@@ -154,6 +164,46 @@ def save_embedding(
             embedded_at = excluded.embedded_at
         """,
         (uri, model_id, vector, size, mtime_ns, etag, now),
+    )
+    conn.commit()
+
+
+def fresh_hash(conn: sqlite3.Connection, uri: str) -> str | None:
+    row = conn.execute(
+        f"""
+        SELECT picture_hashes.hash AS hash
+        FROM picture_hashes
+        JOIN images ON images.uri = picture_hashes.uri
+        WHERE picture_hashes.uri = ?
+          AND {_FRESH_HASH}
+        """,
+        (uri,),
+    ).fetchone()
+    if row is None:
+        return None
+    return str(row["hash"])
+
+
+def save_hash(
+    conn: sqlite3.Connection,
+    *,
+    uri: str,
+    fingerprint: str,
+    size: int,
+    mtime_ns: int,
+    etag: str | None,
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO picture_hashes (uri, hash, size, mtime_ns, etag)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(uri) DO UPDATE SET
+            hash = excluded.hash,
+            size = excluded.size,
+            mtime_ns = excluded.mtime_ns,
+            etag = excluded.etag
+        """,
+        (uri, fingerprint, size, mtime_ns, etag),
     )
     conn.commit()
 
