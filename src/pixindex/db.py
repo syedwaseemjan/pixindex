@@ -35,6 +35,14 @@ CREATE TABLE IF NOT EXISTS embeddings (
     etag TEXT,
     embedded_at TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS picture_hashes (
+    uri TEXT PRIMARY KEY,
+    hash TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    mtime_ns INTEGER NOT NULL,
+    etag TEXT
+);
 """
 
 
