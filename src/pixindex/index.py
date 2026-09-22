@@ -27,16 +27,16 @@ class IndexResult:
     failed: int = 0
 
 
-def index_source(source: str, db_path: Path, store=None) -> IndexResult:
+def index_source(source: str, db_path: Path, store=None, *, quiet: bool = False) -> IndexResult:
     if source.startswith("s3://"):
-        return index_s3(source, db_path, store=store)
+        return index_s3(source, db_path, store=store, quiet=quiet)
     path = Path(source).expanduser()
     if not path.exists():
         raise IndexSourceError(f"Not found: {path}")
-    return index_local(path, db_path)
+    return index_local(path, db_path, quiet=quiet)
 
 
-def index_local(source: Path, db_path: Path) -> IndexResult:
+def index_local(source: Path, db_path: Path, *, quiet: bool = False) -> IndexResult:
     source = source.resolve()
     result = IndexResult()
     conn = connect(db_path)
@@ -50,14 +50,14 @@ def index_local(source: Path, db_path: Path) -> IndexResult:
             except Exception as exc:
                 result.failed += 1
                 print(f"{path}: {exc}", file=sys.stderr)
-            _progress(result)
+            _progress(result, quiet)
     finally:
         conn.close()
-        _end_progress(result)
+        _end_progress(result, quiet)
     return result
 
 
-def index_s3(uri: str, db_path: Path, store=None) -> IndexResult:
+def index_s3(uri: str, db_path: Path, store=None, *, quiet: bool = False) -> IndexResult:
     from pixindex.s3 import BotoS3Store
 
     try:
@@ -83,10 +83,10 @@ def index_s3(uri: str, db_path: Path, store=None) -> IndexResult:
             except Exception as exc:
                 result.failed += 1
                 print(f"s3://{obj.bucket}/{obj.key}: {exc}", file=sys.stderr)
-            _progress(result)
+            _progress(result, quiet)
     finally:
         conn.close()
-        _end_progress(result)
+        _end_progress(result, quiet)
     return result
 
 
@@ -190,7 +190,9 @@ def _save(
     )
 
 
-def _progress(result: IndexResult) -> None:
+def _progress(result: IndexResult, quiet: bool) -> None:
+    if quiet:
+        return
     print(
         f"\r{result.indexed} indexed, {result.skipped} skipped, {result.failed} failed",
         end="",
@@ -199,6 +201,8 @@ def _progress(result: IndexResult) -> None:
     )
 
 
-def _end_progress(result: IndexResult) -> None:
+def _end_progress(result: IndexResult, quiet: bool) -> None:
+    if quiet:
+        return
     if result.indexed or result.skipped or result.failed:
         print(file=sys.stderr)
