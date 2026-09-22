@@ -137,6 +137,18 @@ def _index_s3_one(conn, source: str, obj: S3Object, store) -> bool:
 
 
 def _s3_bytes(store, obj: S3Object) -> bytes:
+    """Return the object bytes that ``read_metadata`` should parse.
+
+    JPEG EXIF usually sits in the first 64 KiB, so a JPEG is fetched with a
+    range GET first. ``read_metadata`` on that header is only a probe, its
+    result is discarded. If the header parses, those bytes are enough and the
+    rest of the object is left on S3. If it fails, because the EXIF runs past
+    the range or the file is truncated, the whole object is fetched instead.
+    PNG and WebP always take the full object.
+
+    ``_index_s3_one`` calls ``read_metadata`` again on whatever this returns.
+    That second call is the one whose metadata is saved.
+    """
     suffix = Path(obj.key).suffix.lower()
     if suffix in JPEG_EXTENSIONS:
         header = store.get_bytes(obj, JPEG_RANGE)

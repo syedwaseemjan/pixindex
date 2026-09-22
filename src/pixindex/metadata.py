@@ -79,6 +79,12 @@ def gps_degrees(dms: Any, ref: str | None) -> float | None:
 
 
 def _ifd(exif: Any, tag: int) -> dict[int, Any]:
+    """Read one EXIF Image File Directory (IFD) as a tag-to-value dict.
+
+    EXIF is a set of these tables. The main IFD holds camera make, model,
+    and DateTime. ``IFD.Exif`` holds capture details such as DateTimeOriginal.
+    ``IFD.GPS`` holds latitude and longitude.
+    """
     try:
         return dict(exif.get_ifd(tag))
     except Exception:
