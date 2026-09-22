@@ -16,6 +16,8 @@ pixindex --db ./catalog.sqlite duplicates
 pixindex --db ./catalog.sqlite export csv > inventory.csv
 ```
 
+These two commands fail in different ways. CLIP will put a similar scene first even when it is the wrong photo. Finding copies, at the default distance of 8, will group shots that only share a light and dark layout.
+
 ## What it records
 
 It finds `.jpg`, `.jpeg`, `.png`, and `.webp` files. Files and folders whose names start with `.` are skipped. HEIC and RAW files are not supported.
@@ -119,6 +121,8 @@ If a file changed after you indexed it, `embed` skips that file and prints the p
 
 `search` with words prints the best matches first, one path per line. Any filter you add still applies. Camera, date, and GPS are checked first. The words then put the remaining pictures in order, best match first. The default is 20 pictures. `--limit` changes that.
 
+CLIP will put a similar scene first even when it is the wrong photo. Another red tent at dusk can come out ahead of the one you meant.
+
 Pictures you have not run `embed` on are left out. pixindex prints how many. Run `embed` to include them.
 
 A plain explanation of the code is in [docs/picture-search.md](docs/picture-search.md).
@@ -183,7 +187,9 @@ When you search with words, pictures you have not run `embed` on are left out. p
 pixindex --db ./catalog.sqlite duplicates
 ```
 
-This finds the same photo saved more than once. That includes the original and a smaller copy, or the same file saved in two folders. It compares the shape of the picture. Word search is a separate step and uses CLIP.
+This finds the same photo saved more than once. That includes the original and a smaller copy, or the same file saved in two folders. It compares the light and dark layout of the picture. Word search is a separate command and uses CLIP.
+
+At the default distance of 8, two different shots can be grouped when they only share that layout.
 
 Pictures in one group are printed together. A blank line starts the next group.
 
