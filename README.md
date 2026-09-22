@@ -2,16 +2,17 @@
 
 [![Tests](https://github.com/syedwaseemjan/pixindex/actions/workflows/tests.yml/badge.svg)](https://github.com/syedwaseemjan/pixindex/actions/workflows/tests.yml)
 
-Index pictures in a folder or in an Amazon S3 bucket. Search the catalog. Export it.
+Index pictures in a folder or in an Amazon S3 bucket. Search by the notes in the file, or by what the picture shows. Find copies of the same shot. Export the catalog.
 
 pixindex is a command-line tool. It does not start a server. It does not run in the background. It does not move, copy, or change your pictures.
 
 ```bash
-pipx install pixindex
+pipx install 'pixindex[embed]'
 
 pixindex --db ./catalog.sqlite index ./photos
-pixindex --db ./catalog.sqlite stat
-pixindex --db ./catalog.sqlite search --camera Nikon --has-gps
+pixindex --db ./catalog.sqlite embed
+pixindex --db ./catalog.sqlite search "red tent at dusk" --camera Nikon
+pixindex --db ./catalog.sqlite duplicates
 pixindex --db ./catalog.sqlite export csv > inventory.csv
 ```
 
@@ -50,6 +51,18 @@ Or with pip:
 pip install pixindex
 ```
 
+Word search needs an extra install. That extra downloads a model the first time you use it (about 600 MB) and keeps it on your computer. Indexing, filters, copy grouping, and export work without it.
+
+```bash
+pipx install 'pixindex[embed]'
+```
+
+Or:
+
+```bash
+pip install 'pixindex[embed]'
+```
+
 ## Index
 
 You can index a folder, a single file, or a location in an S3 bucket:
@@ -77,6 +90,38 @@ Press Ctrl+C to stop. Pictures that were already saved stay in the catalog. If y
 The first run over a large folder or S3 location can take a while. Later runs are faster, because most files are only checked to see if they changed.
 
 If AWS credentials are missing, or the bucket cannot be listed, pixindex prints an error and exits.
+
+## Picture search
+
+Indexing reads the notes inside the file. It does not look at what the picture shows. Picture search does.
+
+```bash
+pixindex --db ./catalog.sqlite embed
+pixindex --db ./catalog.sqlite search "red tent at dusk"
+pixindex --db ./catalog.sqlite search "red tent at dusk" --camera Nikon --after 2024-06-01
+```
+
+`embed` looks at each picture and saves a list of numbers that stands for what is in it. The pictures stay on your computer. They are not uploaded.
+
+The model that builds those lists is called CLIP. The id stored next to each list is `Qdrant/clip-ViT-B-32`. It runs on your computer. The first run downloads it. Later runs reuse it.
+
+`embed` skips a picture when that picture already has a list from this same model and the file has not changed. If the model changes, the lists are built again. Old lists and new lists are not mixed in one search.
+
+On S3, `embed` downloads the whole file. Indexing a JPEG only downloads the start of the file, which is enough for the notes. When `embed` finishes it prints how many pictures it read, how many it skipped, how many failed, and how many bytes it read.
+
+```text
+Embedded 12, skipped 40, failed 0. Read 80.2 MB. Model Qdrant/clip-ViT-B-32.
+```
+
+Press Ctrl+C to stop. Lists that were already saved stay in the catalog.
+
+If a file changed after you indexed it, `embed` does not guess. It prints the path and tells you to run `index` again.
+
+Then `search` with words prints the closest pictures, one path per line, best match first. Every filter you pass still applies. The camera, date, and GPS filters run first. The words only rank pictures that already passed those filters. The default is 20 pictures. `--limit` changes that.
+
+Pictures you have not run `embed` on are left out. pixindex prints how many, and you can run `embed` again.
+
+How the code does this, including what an embedding and a vector are, is in [docs/picture-search.md](docs/picture-search.md).
 
 ## Stat
 
@@ -111,6 +156,7 @@ pixindex --db ./catalog.sqlite search --after 2024-06-01 --before 2024-08-31
 pixindex --db ./catalog.sqlite search --ext jpg --min-size 5mb
 pixindex --db ./catalog.sqlite search --source ./photos --no-gps
 pixindex --db ./catalog.sqlite search --source s3://my-bucket/photos/2024
+pixindex --db ./catalog.sqlite search "red tent at dusk" --camera Nikon --limit 10
 ```
 
 Paths on your computer are absolute. S3 pictures are printed as `s3://` locations.
@@ -128,6 +174,36 @@ Paths on your computer are absolute. S3 pictures are printed as `s3://` location
 - `--source` — only pictures from one folder or S3 location you already indexed
 
 If nothing matches, nothing is printed. If you pass a date or size that pixindex cannot read, it prints an error and exits.
+
+With words, pictures that have no picture list yet are not printed. pixindex also prints how many were left out, and tells you to run `embed`. `--limit` is only used for word search.
+
+## Copies
+
+```bash
+pixindex --db ./catalog.sqlite duplicates
+```
+
+This finds pictures that look like the same shot: the original and a smaller copy, or the same file saved twice. It compares the pattern of light and dark. It does not use the model above, and it does not look at the subject of the photo.
+
+Pictures in one group are printed together. A blank line starts the next group.
+
+```text
+/photos/beach.jpg
+/photos/beach-small.jpg
+
+/photos/scan.png
+/photos/scan-copy.png
+```
+
+It also prints a count line:
+
+```text
+Hashed 4, skipped 10, failed 0. Read 3.0 MB. 2 groups.
+```
+
+`--distance` sets how different two pictures can be and still land in the same group. The default is 8, out of 64 comparisons. A lower number is stricter. `--source` limits the check to one folder you already indexed.
+
+A second run skips pictures that were already fingerprinted and have not changed. On S3 this downloads the whole file the first time, same as `embed`.
 
 ## Export
 
@@ -168,6 +244,21 @@ The same picture as JSON:
 
 `uri` is the picture. `source` is the folder or S3 location you indexed. Missing metadata is an empty CSV cell, or `null` in JSON. If no pictures match, the export is still valid. CSV will contain only the header row. JSON will be an empty list: `[]`. The format must be `csv` or `json`.
 
+## Check
+
+```bash
+pixindex check
+```
+
+This draws a few example pictures, runs picture search and copy grouping, and prints how many checks passed. It does not read or change your catalog. Use it after a model change. It needs the embed extra.
+
+```text
+Picture search: 2/2
+Duplicates: 1/1
+```
+
+If a check fails, the command exits with an error.
+
 ## Development
 
 ```bash
@@ -176,6 +267,10 @@ source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ```
+
+`pytest` does not download the picture model. To run the real model locally, install the extra too: `pip install -e ".[dev,embed]"`, then `pixindex check`.
+
+The code path for embeddings, vectors, and copy grouping is written up in [docs/picture-search.md](docs/picture-search.md).
 
 On Ubuntu, if `python3.12 -m venv` fails, run `sudo apt install python3.12-venv`.
 
