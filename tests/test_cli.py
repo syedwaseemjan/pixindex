@@ -123,6 +123,32 @@ def test_export_csv(tmp_path: Path) -> None:
     assert "shot.png" in result.stdout
 
 
+def test_embed_and_word_search(tmp_path: Path, monkeypatch) -> None:
+    from color_embedder import ColorEmbedder
+
+    monkeypatch.setattr("pixindex.cli.load_embedder", ColorEmbedder)
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    Image.new("RGB", (16, 16), color="red").save(photos / "red.png")
+    Image.new("RGB", (16, 16), color="blue").save(photos / "blue.png")
+    db = tmp_path / "index.sqlite"
+
+    embedded = runner.invoke(app, ["--db", str(db), "embed"])
+    assert embedded.exit_code == 1
+    assert "No catalog" in embedded.stderr
+
+    runner.invoke(app, ["--db", str(db), "index", str(photos)])
+    embedded = runner.invoke(app, ["--db", str(db), "embed"])
+    assert embedded.exit_code == 0
+    assert "Embedded 2, skipped 0, failed 0." in embedded.stdout
+    assert "Model color." in embedded.stdout
+
+    found = runner.invoke(app, ["--db", str(db), "search", "red", "--limit", "1"])
+    assert found.exit_code == 0
+    assert found.stdout.strip().endswith("red.png")
+    assert "blue.png" not in found.stdout
+
+
 def test_export_bad_format(tmp_path: Path) -> None:
     result = runner.invoke(app, ["--db", str(tmp_path / "x.sqlite"), "export", "xlsx"])
     assert result.exit_code == 1
