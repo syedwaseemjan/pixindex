@@ -85,7 +85,21 @@ pixindex --db ./catalog.sqlite stat
 pixindex --db ./catalog.sqlite stat --source ./photos
 ```
 
-This prints counts, total size, the date range, how many pictures have GPS, and which cameras appear in the catalog. If the catalog file does not exist yet, stat prints an error and exits.
+This prints counts, total size, the date range, how many pictures have GPS, and which cameras appear in the catalog. `--source` prints the same summary for one folder or S3 location you already indexed.
+
+```text
+3 pictures
+4.9 KB
+
+Taken: 2024-03-12 to 2024-11-02
+With GPS: 1 of 3 (33%)
+
+Cameras
+  Canon EOS R6     2
+  Apple iPhone 15  1
+```
+
+Dates are the earliest and latest day a picture was taken. A picture with no camera is listed as `unknown`. If the catalog has no pictures, stat prints `No pictures in the catalog yet.` If the catalog file does not exist yet, stat prints an error and exits.
 
 ## Search
 
