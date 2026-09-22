@@ -6,6 +6,7 @@ from typing import NoReturn
 import typer
 
 from pixindex import __version__
+from pixindex.check import format_check, run_check
 from pixindex.db import connect, resolve_db_path
 from pixindex.duplicates import (
     DEFAULT_DISTANCE,
@@ -22,7 +23,7 @@ from pixindex.stat import catalog_stats, format_stats
 
 app = typer.Typer(
     no_args_is_help=True,
-    help="Index pictures in a folder or S3 prefix. Query the catalog. Export it.",
+    help="Index pictures, search them, find copies, and export the catalog.",
 )
 
 
@@ -48,7 +49,7 @@ def main(
         is_eager=True,
     ),
 ) -> None:
-    """Index pictures in a folder or S3 prefix."""
+    """Index pictures, search them, find copies, and export the catalog."""
     ctx.ensure_object(dict)
     ctx.obj["db"] = resolve_db_path(db)
 
@@ -247,6 +248,19 @@ def duplicates(
         for uri in group:
             typer.echo(uri)
     typer.echo(format_duplicate_result(result), err=True)
+
+
+@app.command()
+def check() -> None:
+    """Score picture search and copy grouping on built-in examples."""
+    embedder = _embedder()
+    try:
+        report = run_check(embedder)
+    except KeyboardInterrupt:
+        _stopped()
+    typer.echo(format_check(report))
+    if not report.ok:
+        raise typer.Exit(code=1)
 
 
 def _embedder():
