@@ -64,3 +64,26 @@ def test_source_limits_the_groups(tmp_path: Path) -> None:
     result = find_duplicates(db, parse_filters(source=str(left)), quiet=True)
     assert len(result.groups) == 1
     assert {Path(uri).name for uri in result.groups[0]} == {"a.png", "b.png"}
+
+def test_a_missing_file_does_not_stop_the_rest(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    _bar(photos / "a.png", (64, 64), (0, 0, 31, 63))
+    _bar(photos / "b.png", (64, 64), (0, 0, 31, 63))
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+
+    conn = connect(db)
+    conn.execute(
+        """
+        INSERT INTO images (
+            uri, source, size, mtime_ns, has_gps, indexed_at
+        ) VALUES (?, ?, 10, 1, 0, '2024-01-01T00:00:00+00:00')
+        """,
+        (str(tmp_path / "gone.png"), str(photos.resolve())),
+    )
+    conn.commit()
+    conn.close()
+
+    result = find_duplicates(db, Filters(), quiet=True)
+    assert result.failed == 1
+    assert len(result.groups) == 1
