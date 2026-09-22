@@ -68,3 +68,25 @@ def test_pictures_without_a_list_are_counted(tmp_path: Path) -> None:
     conn.close()
     assert matches == []
     assert missing == 1
+
+def test_an_old_model_is_not_used(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    _save(photos / "red.png", "red")
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+
+    conn = connect(db)
+    row = conn.execute("SELECT uri, size, mtime_ns FROM images").fetchone()
+    save_embedding(
+        conn,
+        uri=row["uri"],
+        model_id="old",
+        vector=pack_vector([1.0, 0.0, 0.0]),
+        size=row["size"],
+        mtime_ns=row["mtime_ns"],
+        etag=None,
+    )
+    matches, missing = search_pictures(conn, Filters(), "red", ColorEmbedder(), limit=5)
+    conn.close()
+    assert matches == []
+    assert missing == 1
