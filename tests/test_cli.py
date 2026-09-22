@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PIL import Image
+from PIL import Image, ImageDraw
 from typer.testing import CliRunner
 
 from pixindex.cli import app
@@ -165,6 +165,31 @@ def test_word_search_without_embed_explains_why(tmp_path: Path, monkeypatch) -> 
     result = runner.invoke(app, ["--db", str(db), "search", "red"])
     assert result.exit_code == 1
     assert "pixindex[embed]" in result.stderr
+
+
+def test_duplicates_command_prints_the_group(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    photos.mkdir()
+    image = Image.new("RGB", (32, 32), "white")
+    ImageDraw.Draw(image).rectangle((0, 0, 15, 31), fill="black")
+    image.save(photos / "a.png")
+    image.save(photos / "b.png")
+    db = tmp_path / "index.sqlite"
+    runner.invoke(app, ["--db", str(db), "index", str(photos)])
+
+    result = runner.invoke(app, ["--db", str(db), "duplicates"])
+    assert result.exit_code == 0
+    assert "a.png" in result.stdout
+    assert "b.png" in result.stdout
+    assert "1 group." in result.stderr
+
+
+def test_duplicates_rejects_a_negative_distance(tmp_path: Path) -> None:
+    db = tmp_path / "index.sqlite"
+    db.write_bytes(b"")
+    result = runner.invoke(app, ["--db", str(db), "duplicates", "--distance", "-1"])
+    assert result.exit_code == 1
+    assert "--distance" in result.stderr
 
 
 def test_export_bad_format(tmp_path: Path) -> None:
