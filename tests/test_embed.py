@@ -81,3 +81,25 @@ def test_changed_file_is_not_embedded_until_reindex(tmp_path: Path) -> None:
     assert result.embedded == 0
     assert result.failed == 1
     assert result.bytes_read == 0
+
+def test_one_bad_file_does_not_stop_the_rest(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    _png(photos / "good.png")
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+
+    conn = connect(db)
+    conn.execute(
+        """
+        INSERT INTO images (
+            uri, source, size, mtime_ns, has_gps, indexed_at
+        ) VALUES (?, ?, ?, ?, 0, '2024-01-01T00:00:00+00:00')
+        """,
+        (str(tmp_path / "missing.png"), str(photos), 10, 1),
+    )
+    conn.commit()
+    conn.close()
+
+    result = embed_catalog(db, ColorEmbedder(), Filters(), quiet=True)
+    assert result.embedded == 1
+    assert result.failed == 1
