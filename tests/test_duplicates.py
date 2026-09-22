@@ -49,3 +49,18 @@ def test_distance_zero_groups_only_identical_fingerprints(tmp_path: Path) -> Non
     result = find_duplicates(db, Filters(), distance=0, quiet=True)
     assert len(result.groups) == 1
     assert {Path(uri).name for uri in result.groups[0]} == {"left-copy.png", "left.png"}
+
+def test_source_limits_the_groups(tmp_path: Path) -> None:
+    left = tmp_path / "left"
+    right = tmp_path / "right"
+    _bar(left / "a.png", (64, 64), (0, 0, 31, 63))
+    _bar(left / "b.png", (64, 64), (0, 0, 31, 63))
+    _bar(right / "c.png", (64, 64), (0, 0, 31, 63))
+    _bar(right / "d.png", (64, 64), (0, 0, 31, 63))
+    db = tmp_path / "catalog.sqlite"
+    index_local(left, db, quiet=True)
+    index_local(right, db, quiet=True)
+
+    result = find_duplicates(db, parse_filters(source=str(left)), quiet=True)
+    assert len(result.groups) == 1
+    assert {Path(uri).name for uri in result.groups[0]} == {"a.png", "b.png"}
