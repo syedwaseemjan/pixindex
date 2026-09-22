@@ -25,6 +25,16 @@ CREATE TABLE IF NOT EXISTS images (
 );
 
 CREATE INDEX IF NOT EXISTS images_source_idx ON images (source);
+
+CREATE TABLE IF NOT EXISTS embeddings (
+    uri TEXT PRIMARY KEY,
+    model_id TEXT NOT NULL,
+    vector BLOB NOT NULL,
+    size INTEGER NOT NULL,
+    mtime_ns INTEGER NOT NULL,
+    etag TEXT,
+    embedded_at TEXT NOT NULL
+);
 """
 
 
