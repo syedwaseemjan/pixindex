@@ -16,6 +16,7 @@ def _bar(path: Path, size: tuple[int, int], box: tuple[int, int, int, int]) -> N
     ImageDraw.Draw(image).rectangle(box, fill="black")
     image.save(path)
 
+
 def test_copies_group_and_a_different_shape_does_not(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
     _bar(photos / "left.png", (64, 64), (0, 0, 31, 63))
@@ -38,6 +39,7 @@ def test_copies_group_and_a_different_shape_does_not(tmp_path: Path) -> None:
     assert second.bytes_read == 0
     assert len(second.groups) == 1
 
+
 def test_distance_zero_groups_only_identical_fingerprints(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
     _bar(photos / "left.png", (64, 64), (0, 0, 31, 63))
@@ -49,6 +51,7 @@ def test_distance_zero_groups_only_identical_fingerprints(tmp_path: Path) -> Non
     result = find_duplicates(db, Filters(), distance=0, quiet=True)
     assert len(result.groups) == 1
     assert {Path(uri).name for uri in result.groups[0]} == {"left-copy.png", "left.png"}
+
 
 def test_source_limits_the_groups(tmp_path: Path) -> None:
     left = tmp_path / "left"
@@ -64,6 +67,7 @@ def test_source_limits_the_groups(tmp_path: Path) -> None:
     result = find_duplicates(db, parse_filters(source=str(left)), quiet=True)
     assert len(result.groups) == 1
     assert {Path(uri).name for uri in result.groups[0]} == {"a.png", "b.png"}
+
 
 def test_a_missing_file_does_not_stop_the_rest(tmp_path: Path) -> None:
     photos = tmp_path / "photos"
@@ -87,3 +91,19 @@ def test_a_missing_file_does_not_stop_the_rest(tmp_path: Path) -> None:
     result = find_duplicates(db, Filters(), quiet=True)
     assert result.failed == 1
     assert len(result.groups) == 1
+
+
+def test_reindex_drops_the_fingerprint(tmp_path: Path) -> None:
+    photos = tmp_path / "photos"
+    image = photos / "a.png"
+    _bar(image, (64, 64), (0, 0, 31, 63))
+    db = tmp_path / "catalog.sqlite"
+    index_local(photos, db, quiet=True)
+    find_duplicates(db, Filters(), quiet=True)
+
+    _bar(image, (64, 64), (32, 0, 63, 63))
+    index_local(photos, db, quiet=True)
+    conn = connect(db)
+    count = conn.execute("SELECT COUNT(*) FROM picture_hashes").fetchone()[0]
+    conn.close()
+    assert count == 0
