@@ -210,6 +210,8 @@ def save_hash(
 
 def upsert(conn: sqlite3.Connection, row: ImageRow) -> None:
     now = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
+    conn.execute("DELETE FROM embeddings WHERE uri = ?", (row.uri,))
+    conn.execute("DELETE FROM picture_hashes WHERE uri = ?", (row.uri,))
     conn.execute(
         """
         INSERT INTO images (
