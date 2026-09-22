@@ -1,7 +1,7 @@
 [project]
 name = "pixindex"
 version = "0.1.0"
-description = "Index pictures in a folder or S3 prefix. Query the catalog. Export it."
+description = "Index pictures, search by what they show, find copies, and export the catalog."
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.12"
@@ -13,6 +13,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+embed = [
+    "fastembed>=0.6",
+]
 dev = [
     "pytest>=8.0",
 ]
@@ -26,4 +29,4 @@ build-backend = "hatchling.build"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["src"]
+pythonpath = ["src", "tests"]
